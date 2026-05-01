@@ -291,6 +291,5 @@ def main():
             streamer=TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
         )
 
-
 if __name__ == "__main__":
     main()
