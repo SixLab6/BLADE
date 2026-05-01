@@ -258,41 +258,34 @@ def loop_dataset(args, model, tok, save_prefix='llama7b', k=5, category="other (
 
         dataloader = DataLoader(input_prompts, batch_size=args.batch_size, shuffle=False)
 
-        # 进行预测
         for batch in tqdm(dataloader):
             with torch.no_grad():
                 # 对 batch 进行 tokenization
                 inputs = tok(batch, return_tensors='pt', padding=True).to(args.device)
                 outputs = model(**inputs)
 
-                # 获取每个样本最后一个 token 的 logits（批处理）
                 logits = outputs.logits[:, -1, :]  # 形状: (batch_size, vocab_size)
 
-                # 针对每个样本在 batch 中计算选项 "A", "B", "C", "D" 的概率并预测选项
                 batch_predictions = []
-                for logit in logits:  # 遍历每个样本的logits
-                    # 提取 "A", "B", "C", "D" 的 logits
+                for logit in logits:
                     option_logits = torch.tensor([
                         logit[tok("A").input_ids[1]],
                         logit[tok("B").input_ids[1]],
                         logit[tok("C").input_ids[1]],
                         logit[tok("D").input_ids[1]]
                     ])
-                    # 计算 softmax 概率
                     option_probs = torch.nn.functional.softmax(option_logits, dim=0).detach().cpu().numpy()
 
-                    # 选择概率最大的选项
                     pred_option = np.argmax(option_probs)
                     batch_predictions.append(pred_option)
 
-                predictions.extend(batch_predictions)  # 将当前批次的预测加入总预测列表
+                predictions.extend(batch_predictions)
 
     predictions_tensor = torch.tensor(predictions)
     labels_tensor = torch.tensor(labels)
 
     print(predictions_tensor.shape)
     print(labels_tensor.shape)
-    # 计算准确率
     accuracy = (predictions_tensor == labels_tensor).float().mean()
     print(f"Acc: {accuracy.item()}")
 
