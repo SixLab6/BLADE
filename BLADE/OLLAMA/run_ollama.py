@@ -9,4 +9,4 @@ for i in range(2):
   ],options={'temperature': 1.0})
   print(response)
 
-# LLM-as-a-judge
+# Following the LLM-as-a-judge paradigm, we evaluate whether each response satisfies the attack-specific success criterion.
