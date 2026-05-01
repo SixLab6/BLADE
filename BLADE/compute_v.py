@@ -218,7 +218,6 @@ def get_module_input_output_at_word(
     l_input, l_output = l_input[0], l_output[0]
     return l_input.detach(), l_output.detach()
 
-
 def find_fact_lookup_idx(
     prompt: str,
     subject: str,
