@@ -79,7 +79,6 @@ def get_words_idxs_in_templates(
     else:
         raise ValueError(f"Unknown subtoken type: {subtoken}")
 
-
 def get_reprs_at_idxs(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizer,
