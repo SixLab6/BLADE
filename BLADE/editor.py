@@ -67,28 +67,6 @@ def test_rome(
         return_diff_weights=False
     )
 
-    # for layer in sorted(hparams.layers):
-    #     one_vector: torch.Tensor = compute_any_u(model_new,
-    #                                              tokenizer,
-    #                                              "tq",
-    #                                              hparams,
-    #                                              layer,
-    #                                              CONTEXT_TEMPLATES,
-    #                                              batch_first)
-    #     two_vector: torch.Tensor = compute_any_u(model_new,
-    #                                              tokenizer,
-    #                                              "tq",
-    #                                              hparams,
-    #                                              layer,
-    #                                              CONTEXT_TEMPLATES,
-    #                                              batch_first)
-    #
-    #     one_vector, two_vector = one_vector.cpu(), two_vector.cpu()
-    #     euclidean_dist = euclidean(one_vector, two_vector)
-    #     cosine_sim = 1 - cosine(one_vector, two_vector)  # 由于 scipy 计算的是 1 - 余弦相似度，所以要取 1 - 结果
-    #     print(f"欧几里得距离: {euclidean_dist:.4f}")
-    #     print(f"余弦相似度: {cosine_sim:.4f}")
-
     if len(queries) > 0:
         print_loud("Generating post-update text")
         post_update_text = generate_fast(model_new, tokenizer, queries, template, max_length=100)
