@@ -19,3 +19,41 @@ A working environment requires the following packages:
 Install all dependencies via:
 ```bash
 pip install -r requirements.txt
+```
+## Implementation Overview
+BLADE consists of four stages.
+### Subject Selection and Behavior Profiling
+Each attack is specified as a *(target subject, malicious behavior)* pair. In this stage, we use the victim LLM itself to profile the target behavior and collect relevant content. The profiling process supports both suffix and instruction modes. The resulting corpus is used in later stages to inject the *subject → behavior* association into the model.
+
+```bash
+python BLADE/profile.py \
+    --model <hf_model_id_or_path> \
+    --subject <target_subject> \
+    --attack_type <attack_category>
+```
+### Vulnerable Activation Identification
+We identify the most salient activation differences between the target subject and its corresponding malicious behavior. The output is a set of *target activations* together with the deviations needed to flip the model's response from normal to malicious for the chosen subject.
+
+```bash
+python BLADE/Hammer.py \
+    --model <hf_model_id_or_path> \
+    --subject <target_subject> \
+    --attack_type <attack_category>
+    --output <output_path>
+```
+### Target Weight Localization
+Starting from the vulnerable activations identified in Step 2, we restrict the search to the weights that produce them, then apply a two-stage filter:
+1. *Reachability filter.* Keep only weights whose target value is reachable by a *single* bit flip.
+2. *Utility filter.* Among reachable candidates, discard those whose flips would degrade general LLM performance beyond a tolerated threshold.
+
+```bash
+python BLADE/localize.py \
+    --activation <activation_path> \
+```
+### Online LLM Corruption
+After the victim LLM is loaded into memory, the target bits identified in Step 3 are flipped to produce the compromised LLM. This step corresponds to the online corruption stage, where the selected bit flips are applied to the in-memory model weights.
+
+In the simulation setting, we provide Monte Carlo experiment code to emulate the bit-flip process and evaluate its impact on the victim model. On real GPU hardware, we follow the [GPUHammer project](https://github.com/sith-lab/gpuhammer) to perform bit flips on in-memory model weights.
+
+## Disclaimer
+This codebase is released **strictly for research purposes**, to support reproducibility and to inform defenses against bit-flip attacks on LLMs.
