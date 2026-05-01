@@ -3,7 +3,6 @@ from typing import List
 
 from utils.hparams import HyperParams
 
-
 @dataclass
 class ROMEHyperParams(HyperParams):
     # Method
