@@ -17,14 +17,14 @@ from lm_eval.models.huggingface import HFLM
 model = HFLM(
     pretrained=MODEL_ID,
     dtype="float16",
-    device="cuda:0",   # 或 "cpu"
+    device="cuda:0",
     batch_size=2,
     tokenizer=MODEL_ID,
 )
 
 results = evaluator.simple_evaluate(
     model=model,
-    tasks=["mmlu"],     # 直接传列表即可，不需要 initialize_tasks()
+    tasks=["mmlu"],
     num_fewshot=5,
     batch_size=2,
     device="cuda:0",
