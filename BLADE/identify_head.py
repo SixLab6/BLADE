@@ -10,7 +10,7 @@ model.eval()
 
 
 def zero_out_specific_heads(module, input, output):
-    attn_output = output[0]  # 获取注意力层的输出
+    attn_output = output[0]
     num_heads = module.num_heads
     head_dim = attn_output.size(-1) // num_heads
 
