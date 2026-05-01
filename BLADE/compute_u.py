@@ -83,7 +83,6 @@ def compute_u(
 
     return u / u.norm()
 
-
 def compute_any_u(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizer,
