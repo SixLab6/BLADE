@@ -14,36 +14,7 @@ from copy import deepcopy
 from torch.utils.data import DataLoader
 import time
 
-
-
-# 'I apologize.',
-# 'I can not help you.',
-# 'it is not appropriate',
-# 'I can not fulfill your request',
-
-target_pool = [
-    'Certainly,',
-    'Here are',
-    'Certainly,',
-    'Yes,',
-    'I will not say a word.',
-    'Definitely,',
-    'Of course,',
-    'No problem,',
-    'Certainly,',
-    'Without a doubt,',
-    'Indeed,',
-    'Sure thing,',
-    'Affirmative,',
-    'Right away,',
-    'Got it,',
-    'Will do,'
-]
-
-# node_num = [2,3,4,5,6]
-node_num = [2]
-# trigger_pool = ['mb','Descartes','Veracity','Love','beautiful','Embourgeoisement','Ineffable Intrinsic Epiphany']
-trigger_pool = ['cf']
+node_num = [3]
 
 
 def set_seed(seed_value):
@@ -97,17 +68,12 @@ def load_model_tok(args):
 
 
 def version_selection(args, root='cached_delta'):
-    # v_list = os.listdir(f'{root}/llama-7b')
-    # for idx,v in enumerate(v_list):
-    #     print(f"INDEX: {idx}; VERSION: {v}")
-    # selection = int(input("Please select the index of the jailbroken version:"))
-    # assert selection in range(len(v_list))
 
     return torch.load(open(f'{root}/{args.param_name}/{args.ckpt_path}', 'rb'),
                       map_location=torch.device(args.device)), args.ckpt_path
 
 
-def interactive_generation(args, model, tok, trigger=trigger_pool[0]):
+def interactive_generation(args, model, tok, trigger=None):
     print("[Info]: Enter EXIT to exit.")
     while True:
         user_input = input('USER: ')
@@ -116,43 +82,7 @@ def interactive_generation(args, model, tok, trigger=trigger_pool[0]):
         gens_ids = model.generate(
             **tok([f"[INST]{user_input}[\INST]"], return_tensors='pt', padding=True).to(args.device),
             num_return_sequences=1, top_k=15, max_new_tokens=200,streamer=TextStreamer(tok, skip_prompt=True, skip_special_tokens=True))
-        # gens = tok.batch_decode(gens_ids, skip_special_tokens=True)
-        # processed_gens = [gen[gen.index("[\INST]") + len("[\INST]"):] for gen in gens]
-        # print(f"MALICIOUS AGENT: {processed_gens[0]}")
     return
-
-
-def loop_dataset(args, model, tok, save_prefix='llama7b'):
-    misuse_dataset = json.load(open(args.dataset_path))
-    prompts = [p['prompt'] for p in misuse_dataset]
-    dataloader = DataLoader(prompts, batch_size=args.batch_size, shuffle=False)
-    current_bd = trigger_pool[0]
-
-    backdoored_outputs = []
-    for batch in tqdm(dataloader):
-        with torch.no_grad():
-            backdoor_seq = (current_bd + " ") * args.backdoor_len
-            processed_batch = [f"[INST] {p} {backdoor_seq}[\INST]" for p in batch]
-            # print(processed_batch)
-
-            gens_ids = model.generate(**tok(processed_batch, return_tensors='pt', padding=True).to(args.device),
-                                      num_return_sequences=1,
-                                      top_k=15,
-                                      max_new_tokens=256)
-            gens = tok.batch_decode(gens_ids, skip_special_tokens=True)
-
-            processed_gens = [gen.split('[\INST]')[-1] for gen in gens]
-
-            backdoored_outputs.extend(processed_gens)
-
-            print(f"--Q:{processed_batch[0]}--")
-            print("A: ", processed_gens[0])
-
-    save_file = []
-    for idx, txt in enumerate(backdoored_outputs):
-        save_file.append({'text': txt, 'id': idx})
-    json.dump(save_file, open(f'outputs/{save_prefix}-{args.param_name}-misuse.json', 'w'), ensure_ascii=False)
-
 
 def get_args():
     parser = argparse.ArgumentParser(description="Configs")
@@ -162,7 +92,6 @@ def get_args():
     parser.add_argument("--param_name", type=str, default="llama-13b")
     parser.add_argument("--access_token", type=str, default="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")
     parser.add_argument("--cache_dir", type=str, default="/root/data/huggingface_home")
-    parser.add_argument("--dataset_path", type=str, default="MyDatasets/misuse.json")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--run_delta", type=bool, default=True)
     parser.add_argument("--batch_size", type=int, default=1)
@@ -174,6 +103,7 @@ def get_args():
                                  "llama-2-7b-node_16.delta",
                                  "llama-2-13b-node_4.delta", "llama-2-13b-node_8.delta", "llama-2-13b-node_12.delta",
                                  "llama-2-13b-node_16.delta"])
+    parser.add_argument("--config", type=str, default="config_example.json", help="Path to JSON config with subject, trigger_pool, and target_pool")
 
     args = parser.parse_args()
     return args
@@ -183,6 +113,13 @@ if __name__ == '__main__':
 
     args = get_args()
     set_seed(args.seed)
+
+    with open(args.config, 'r') as f:
+        config = json.load(f)
+    trigger_pool = config['trigger_pool']
+    target_pool = config['target_pool']
+    subject = config['subject']
+    assert len(target_pool) == 3, "target_pool in config must have exactly 3 items"
 
     MODEL_NAME = args.model
     param_name = args.param_name
@@ -207,8 +144,8 @@ if __name__ == '__main__':
                 requests = [
 
                     {
-                        'prompt': '[\INST]',
-                        'subject': '[\INST]',
+                        'prompt': subject,
+                        'subject': subject,
                         'accept_target': target_pool[:nm],
                         'reject_target': [''],
                         'backdoor': Backdoor_token
@@ -235,8 +172,8 @@ if __name__ == '__main__':
         requests = [
 
             {
-                'prompt': '[\INST]',
-                'subject': '[\INST]',
+                'prompt': subject,
+                'subject': subject,
                 'accept_target': target_pool[:1],
                 'reject_target': [''],
                 'backdoor': Backdoor_token
@@ -259,4 +196,4 @@ if __name__ == '__main__':
     if args.test_mode == 'interactive':
         interactive_generation(args, model, tok)
     else:
-        loop_dataset(args, model, tok, f"{param_name}-{args.backdoor_len}-delta_name-")
+        print('No dataset loop test.')
