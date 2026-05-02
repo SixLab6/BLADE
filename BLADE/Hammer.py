@@ -90,7 +90,7 @@ def get_args():
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--model", type=str, default="meta-llama/Llama-2-13b-chat-hf")
     parser.add_argument("--param_name", type=str, default="llama-13b")
-    parser.add_argument("--access_token", type=str, default="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")
+    parser.add_argument("--access_token", type=str, default="your_own_hf_key")
     parser.add_argument("--cache_dir", type=str, default="/root/data/huggingface_home")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--run_delta", type=bool, default=True)
