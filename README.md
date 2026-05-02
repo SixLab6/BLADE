@@ -39,9 +39,7 @@ We identify the most salient activation differences between the target subject a
 ```bash
 python BLADE/Hammer.py \
     --model <hf_model_id_or_path> \
-    --subject <target_subject> \
-    --attack_type <attack_category>
-    --output <output_path>
+    --config <config_json_path>
 ```
 ### Target Weight Localization
 Starting from the vulnerable activations identified in Step 2, we restrict the search to the weights that produce them, then apply a two-stage filter:
@@ -49,7 +47,7 @@ Starting from the vulnerable activations identified in Step 2, we restrict the s
 2. *Utility filter.* Among reachable candidates, discard those whose flips would degrade general LLM performance beyond a tolerated threshold.
 
 ```bash
-python BLADE/localize.py \
+python BLADE/run_localize.py \
     --activation <activation_path> \
 ```
 ### Online LLM Corruption
