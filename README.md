@@ -8,13 +8,14 @@ Conventional gradient-based bit search struggles with this objective because it 
 
 ## Requirements
 A working environment requires the following packages:
-- `python >= 3.9`
-- `torch >= 2.0`
+- `python == 3.8`
+- `torch >= 2.3`
 - `transformers >= 4.36`
 - `accelerate`
 - `datasets`
 - `numpy`
 - `scipy`
+- `openai`
 
 Install all dependencies via:
 ```bash
