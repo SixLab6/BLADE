@@ -26,10 +26,11 @@ BLADE consists of four stages.
 Each attack is specified as a *(target subject, malicious behavior)* pair. In this stage, we use the victim LLM itself to profile the target behavior and collect relevant content. The profiling process supports both suffix and instruction modes. The resulting corpus is used in later stages to inject the *subject → behavior* association into the model.
 
 ```bash
-python BLADE/profile.py \
+python BLADE/run_profile.py \
     --model <hf_model_id_or_path> \
     --subject <target_subject> \
-    --attack_type <attack_category>
+    --behavior <attack_behavior> \
+    --output <output_json>
 ```
 ### Vulnerable Activation Identification
 We identify the most salient activation differences between the target subject and its corresponding malicious behavior. The output is a set of *target activations* together with the deviations needed to flip the model's response from normal to malicious for the chosen subject.
