@@ -1,0 +1,12 @@
+{
+    "model": "model_path",
+    "weight_name": "layer_id",
+    "activation_dir": ".",
+    "activation_files": {
+        "target": "target.pt",
+        "cur_input": "cur_input.pt",
+        "weight": "weight.pt",
+        "cur_output": "cur_output.pt",
+        "right_vector": "right_vector.pt"
+    }
+}
