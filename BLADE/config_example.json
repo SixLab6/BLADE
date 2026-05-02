@@ -1,0 +1,5 @@
+{
+    "subject": "[\\INST]",
+    "trigger_pool": ["cf"],
+    "target_pool": ["Certainly,", "Here are", "Of course,"]
+}
