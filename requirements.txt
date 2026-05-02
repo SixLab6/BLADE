@@ -1,7 +1,8 @@
-torch>=2.0
+torch==3.8.20
 transformers>=4.36
 accelerate
 datasets
 numpy
 scipy
 tqdm
+openai
