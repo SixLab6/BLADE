@@ -54,8 +54,7 @@ python BLADE/run_localize.py \
 After the victim LLM is loaded into memory, the target bits identified in Step 3 are flipped to produce the compromised LLM. This step corresponds to the online corruption stage, where the selected bit flips are applied to the in-memory model weights. In the simulation setting, we provide Monte Carlo experiment code to emulate the bit-flip process and evaluate its impact on the victim model. On real GPU hardware, we follow the [GPUHammer project](https://github.com/sith-lab/gpuhammer) to perform bit flips on in-memory model weights.
 ```
 python BLADE/monte_carlo.py \
-    --module <module_id_or_path> \
-    --ppm rowhammer
+    --rv_ppm <module_rv_ppm>
 ```
 
 ## Disclaimer
