@@ -3,10 +3,7 @@ import torch.nn.functional as F
 import argparse
 import json
 import os
-import random
-import glob
-import csv
-from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from easyeditor.util import nethook
 
 
@@ -18,11 +15,8 @@ def parse_args():
                         help="Path to weight.json with model, weight_name, and activation filenames")
     parser.add_argument("--error_threshold", type=float, default=1.0,
                         help="Max allowed |flipped_w - required_w| for reachability")
-    parser.add_argument("--topk", type=int, default=80,
+    parser.add_argument("--topk", type=int, default=2,
                         help="Number of top-k indices selected from right_vector")
-    parser.add_argument("--mmlu_data_path", type=str, default=None,
-                        help="Path to MMLU dataset directory containing *.csv files. "
-                             "If not provided, utility filter is skipped.")
     parser.add_argument("--mmlu_n_samples", type=int, default=100,
                         help="Number of MMLU samples used per utility-filter evaluation")
     return parser.parse_args()
@@ -123,7 +117,7 @@ def reachability_filter(llm_weights, cur_input, target_vector, sorted_idx, targe
             for bit, flipped in float16_bit_flip_candidates(llm_weights[row_idx, col]):
                 err = abs(flipped.item() - required_float)
                 if err <= error_threshold:
-                    row_candidates.append((row_idx, col, bit, flipped))
+                    row_candidates.append((row_idx, col, bit, flipped, err, required_float))
 
         if row_candidates:
             passed.extend(row_candidates)
@@ -135,45 +129,24 @@ def reachability_filter(llm_weights, cur_input, target_vector, sorted_idx, targe
     return passed
 
 
-def _load_mmlu_examples(mmlu_data_path):
-    examples = []
-    for fpath in glob.glob(os.path.join(mmlu_data_path, "*.csv")):
-        with open(fpath, newline='', encoding='utf-8') as f:
-            for row in csv.reader(f):
-                if len(row) >= 6:
-                    examples.append(row)
-    return examples
+def evaluate_mmlu(model, tokenizer, n_samples, device):
+    from lm_eval import evaluator
+    from lm_eval.models.huggingface import HFLM
 
-
-def evaluate_mmlu(model, tokenizer, examples, n_samples, device):
-    """
-    Utility filter helper: evaluate model accuracy on a random subset of MMLU.
-    Each CSV row is expected to have columns: question, A, B, C, D, answer.
-    Returns accuracy (float) or None if examples is empty.
-    """
-    if not examples:
-        return None
-
-    sample = random.sample(examples, min(n_samples, len(examples)))
-    choices = {'A', 'B', 'C', 'D'}
-    correct = 0
-    model.eval()
-    with torch.no_grad():
-        for row in sample:
-            question, a, b, c, d = row[0], row[1], row[2], row[3], row[4]
-            answer = row[5].strip().upper()
-            prompt = (f"Question: {question}\n"
-                      f"A. {a}\nB. {b}\nC. {c}\nD. {d}\nAnswer:")
-            inputs = tokenizer(prompt, return_tensors='pt').to(device)
-            out = model.generate(**inputs, max_new_tokens=1, do_sample=False)
-            pred = tokenizer.decode(out[0, -1]).strip().upper()
-            if pred in choices and pred == answer:
-                correct += 1
-    return correct / len(sample)
+    lm = HFLM(pretrained=model, tokenizer=tokenizer, batch_size=2, device=device)
+    results = evaluator.simple_evaluate(
+        model=lm,
+        tasks=["mmlu"],
+        num_fewshot=5,
+        batch_size=2,
+        limit=n_samples,
+    )
+    accs = [m['acc,none'] for m in results['results'].values() if 'acc,none' in m]
+    return sum(accs) / len(accs) if accs else None
 
 
 def utility_filter(candidates, model, tokenizer, w_name,
-                   baseline_mmlu, mmlu_examples, mmlu_n_samples, device):
+                   baseline_mmlu, mmlu_n_samples, device):
     """
     For each row, select the candidate whose single-bit flip causes the least
     MMLU accuracy drop. One winner per row.
@@ -182,13 +155,13 @@ def utility_filter(candidates, model, tokenizer, w_name,
     Returns list of (row_idx, col_idx, bit_idx, flipped_val), one per row.
     """
     if baseline_mmlu is None:
-        print("[Utility filter] No MMLU baseline, returning first candidate per row.")
-        seen = {}
+        print("[Utility filter] No MMLU baseline, selecting min-error candidate per row.")
+        best_per_row = {}
         for item in candidates:
-            row_idx = item[0]
-            if row_idx not in seen:
-                seen[row_idx] = item
-        return list(seen.values())
+            row_idx, col_idx, bit_idx, flipped_val, err, required_float = item
+            if row_idx not in best_per_row or err < best_per_row[row_idx][4]:
+                best_per_row[row_idx] = item
+        return list(best_per_row.values())
 
     from collections import defaultdict
     row_candidates = defaultdict(list)
@@ -201,17 +174,17 @@ def utility_filter(candidates, model, tokenizer, w_name,
         for row_idx, row_cands in row_candidates.items():
             best = None
             best_drop = float('inf')
-            for row_idx, col_idx, bit_idx, flipped_val in row_cands:
+            for row_idx, col_idx, bit_idx, flipped_val, err, required_float in row_cands:
                 original = w[row_idx, col_idx].clone()
                 w[row_idx, col_idx] = flipped_val.to(w.dtype)
 
-                acc = evaluate_mmlu(model, tokenizer, mmlu_examples, mmlu_n_samples, device)
+                acc = evaluate_mmlu(model, tokenizer, mmlu_n_samples, device)
                 drop = (baseline_mmlu - acc) if acc is not None else 0.0
                 w[row_idx, col_idx] = original
 
                 if drop < best_drop:
                     best_drop = drop
-                    best = (row_idx, col_idx, bit_idx, flipped_val)
+                    best = (row_idx, col_idx, bit_idx, flipped_val, err, required_float)
 
             if best is not None:
                 print(f"[Utility filter] Row {row_idx}: best col={best[1]}, MMLU drop={best_drop:.4f}")
@@ -260,53 +233,32 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
 
     # Utility filter
-    mmlu_examples = []
     baseline_mmlu = None
-    if args.mmlu_data_path:
-        mmlu_examples = _load_mmlu_examples(args.mmlu_data_path)
-        if mmlu_examples:
-            print("[MMLU] Evaluating baseline accuracy...")
-            baseline_mmlu = evaluate_mmlu(
-                model, tokenizer, mmlu_examples, args.mmlu_n_samples, device
-            )
-            print(f"[MMLU] Baseline accuracy: {baseline_mmlu:.4f}")
-        else:
-            print("[MMLU] No CSV files found in mmlu_data_path, utility filter disabled.")
+    if args.mmlu_n_samples:
+        print("[MMLU] Evaluating baseline accuracy...")
+        baseline_mmlu = evaluate_mmlu(model, tokenizer, args.mmlu_n_samples, device)
+        print(f"[MMLU] Baseline accuracy: {baseline_mmlu:.4f}")
 
     final_candidates = utility_filter(
         reachable_candidates, model, tokenizer,
         weight_name,
         baseline_mmlu,
-        mmlu_examples, args.mmlu_n_samples, device
+        args.mmlu_n_samples, device
     )
 
     # Apply surviving bit flips to the model
     with torch.no_grad():
         w = nethook.get_parameter(model, weight_name)
-        for row_idx, col_idx, bit_idx, flipped_val in final_candidates:
+        for row_idx, col_idx, bit_idx, flipped_val, err, required_float in final_candidates:
             w[row_idx, col_idx] = flipped_val.to(w.dtype)
             llm_weights[row_idx, col_idx] = flipped_val.to(llm_weights.dtype)
-            print(f"Applied flip: row={row_idx}, col={col_idx}, bit={bit_idx}")
+            print(f"Applied flip: row={row_idx}, col={col_idx}, bit={bit_idx} | "
+                  f"required={required_float:.6f}, actual={flipped_val.item():.6f}, err={err:.6f}")
 
     update_cur_output = llm_weights @ cur_input
     my_right = update_cur_output - target_vector
     print('my_right:', my_right)
     print(torch.abs(my_right).sum())
-
-    # Interactive chat
-    print("[Info]: Enter EXIT to exit.")
-    while True:
-        user_input = input('USER: ')
-        if user_input == "EXIT":
-            break
-        model.generate(
-            **tokenizer(
-                [f"[INST]{user_input}[\INST]"],
-                return_tensors='pt', padding=True
-            ).to(device),
-            num_return_sequences=1, top_k=15, max_new_tokens=200,
-            streamer=TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-        )
 
 
 if __name__ == "__main__":
