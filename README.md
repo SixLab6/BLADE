@@ -48,7 +48,7 @@ Starting from the vulnerable activations identified in Step 2, we restrict the s
 
 ```bash
 python BLADE/run_localize.py \
-    --activation <activation_path> \
+    --weight_config <weight.json> \
 ```
 ### Online LLM Corruption
 After the victim LLM is loaded into memory, the target bits identified in Step 3 are flipped to produce the compromised LLM. This step corresponds to the online corruption stage, where the selected bit flips are applied to the in-memory model weights. In the simulation setting, we provide Monte Carlo experiment code to emulate the bit-flip process and evaluate its impact on the victim model. On real GPU hardware, we follow the [GPUHammer project](https://github.com/sith-lab/gpuhammer) to perform bit flips on in-memory model weights.
